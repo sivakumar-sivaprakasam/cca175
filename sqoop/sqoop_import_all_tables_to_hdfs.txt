@@ -1,0 +1,23 @@
+#It is good to verify the target folder exists or not. 
+hadoop fs -ls /user/cloudera/categories
+hadoop fs -ls /user/cloudera/customers
+hadoop fs -ls /user/cloudera/departments
+hadoop fs -ls /user/cloudera/order_items
+hadoop fs -ls /user/cloudera/orders
+hadoop fs -ls /user/cloudera/products
+
+#Deleting the target folder
+hadoop fs -rm -R /user/clouders/categories
+hadoop fs -rm -R /user/clouders/customers
+hadoop fs -rm -R /user/clouders/departments
+hadoop fs -rm -R /user/clouders/order_items
+hadoop fs -rm -R /user/clouders/orders
+hadoop fs -rm -R /user/clouders/products
+
+#Import all tables from MySQL database retail_db into HDFS location /user/cloudera/
+sqoop import-all-tables \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--as-textfile \
+--warehouse-dir=/user/cloudera
