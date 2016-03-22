@@ -1,0 +1,48 @@
+#It is good to verify the target folder exists or not. 
+#We're going to import all the tables into Hive database named retail_db
+#So, the hive tables will be copied into /user/hive/warehouse/retail_db.db folder
+hadoop fs -ls /user/hive/warehouse/retail_db.db/categories
+hadoop fs -ls /user/hive/warehouse/retail_db.db/customers
+hadoop fs -ls /user/hive/warehouse/retail_db.db/departments
+hadoop fs -ls /user/hive/warehouse/retail_db.db/order_items
+hadoop fs -ls /user/hive/warehouse/retail_db.db/orders
+hadoop fs -ls /user/hive/warehouse/retail_db.db/products
+
+#Deleting the target folder
+#--delete-target-dir will not work with sqoop import-all-tables
+hadoop fs -rm -R /user/hive/warehouse/retail_db.db/categories
+hadoop fs -rm -R /user/hive/warehouse/retail_db.db/customers
+hadoop fs -rm -R /user/hive/warehouse/retail_db.db/departments
+hadoop fs -rm -R /user/hive/warehouse/retail_db.db/order_items
+hadoop fs -rm -R /user/hive/warehouse/retail_db.db/orders
+hadoop fs -rm -R /user/hive/warehouse/retail_db.db/products
+
+hadoop fs -rm -R /user/cloudera/categories
+hadoop fs -rm -R /user/cloudera/customers
+hadoop fs -rm -R /user/cloudera/departments
+hadoop fs -rm -R /user/cloudera/order_items
+hadoop fs -rm -R /user/cloudera/orders
+hadoop fs -rm -R /user/cloudera/products
+
+#Import all tables from MySQL database retail_db into Hive default database
+sqoop import-all-tables \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--fields-terminated-by ',' \
+--hive-import \
+--create-hive-table \
+--hive-overwrite
+
+#Import all tables from MySQL database retail_db into Hive database retail_db
+#You have to make sure, the tables which you're going to import doesn't exists in retail_db database
+#If yes, you need to drop them and delete any hdfs folder with table exists, delete them as well
+sqoop import-all-tables \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--fields-terminated-by ',' \
+--hive-import \
+--create-hive-table \
+--hive-overwrite \
+--hive-database retail_db
