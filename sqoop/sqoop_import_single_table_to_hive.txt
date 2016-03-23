@@ -3,6 +3,8 @@
 #When we do import into Hive, the data will be first copied under default hdfs folder and then to hive
 #Hence it is must to delete the hdfs folder 
 #For ex: if you're importing orders table into hive, data will first copied to hdfs folder /user/cloudera/orders
+#If your source table is not having any primary key defined, 
+#you need to explicitely define the column which contains unique key using --split-by switch
 sqoop import \
 --connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
 --username retail_dba \

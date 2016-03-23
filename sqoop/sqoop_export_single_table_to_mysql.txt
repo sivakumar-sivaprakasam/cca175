@@ -1,0 +1,51 @@
+#Export hive table data into MySQL
+#Make sure target mysql table exists and having same schema
+sqoop export \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--table orders_test \
+--export-dir /user/hive/warehouse/retail_db.db/orders
+
+#Serial export
+sqoop export \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--table orders_test \
+--export-dir /user/hive/warehouse/retail_db.db/orders \
+--m 1
+
+#If your hive table columns are using delimiter other than ','
+#you need to explicitely specify the delimiter using --input-fields-terminated-by switch
+sqoop export \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--table orders_test \
+--export-dir /user/hive/warehouse/retail_db.db/orders \
+--input-fields-terminated-by ',' \
+
+#Export specific columns
+#In this case, make sure all the other columns in the mysql table has default constraint 
+sqoop export \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--table orders_test \
+--export-dir /user/hive/warehouse/retail_db.db/orders \
+--input-fields-terminated-by ',' \
+--columns order_id,order_status
+
+#Updating existing data using --update-key switch
+#Suppose, if the key doesn't exists, use --update-mode switch to define how sqoop must handle the case
+#--update-mode can be either updateonly or allowinsert
+sqoop export \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--table orders_test \
+--export-dir /user/hive/warehouse/retail_db.db/orders \
+--input-fields-terminated-by ',' \
+--update-key order_id \
+--update-mode allowinsert

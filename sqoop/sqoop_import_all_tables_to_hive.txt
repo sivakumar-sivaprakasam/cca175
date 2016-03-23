@@ -35,8 +35,20 @@ sqoop import-all-tables \
 --hive-overwrite
 
 #Import all tables from MySQL database retail_db into Hive database retail_db
-#You have to make sure, the tables which you're going to import doesn't exists in retail_db database
+#When you are using --create-hive-table switch, you have to make sure, the tables which you're going to import doesn't exists in retail_db database
 #If yes, you need to drop them and delete any hdfs folder with table exists, delete them as well
+sqoop import-all-tables \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--fields-terminated-by ',' \
+--hive-import \
+--create-hive-table \
+--hive-overwrite \
+--hive-database retail_db
+
+#Import all tables from MySQL database retail_db into Hive database retail_db
+#Removed --create-hive-table switch
 sqoop import-all-tables \
 --connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
 --username retail_dba \
