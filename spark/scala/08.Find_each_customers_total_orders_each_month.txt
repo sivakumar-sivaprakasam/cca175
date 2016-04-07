@@ -1,0 +1,25 @@
+#Find each customers total orders, sales for each date/month
+
+#Transformations used in this use-case: Map, Join, AggregateByKey, SortByKey, Filter
+#Actions used in this use-case: ForEach, Collect
+
+####################### Using scala #############################################
+val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+#If we need to find the total orders & sales for each customers each day, remove the substring method...
+#val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, (x(1), x(2).toInt)))
+val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, (x(1).substring(0, 7), x(2).toInt)))
+val orderItemsMap = orderItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat))
+
+val ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+val orderCustomersMap = ordersJoinedMap.map(x => (x._2._1, x._2._2))
+
+val totalSalesPerMonth = orderCustomersMap.aggregateByKey((0.0, 0))((acc, revenue) => (acc._1 + revenue, acc._2 + 1), (total1, total2) => (total1._1 + total2._1, total1._2 + total2._2)).sortByKey()
+
+totalSalesPerMonth.collect.foreach(println)
+
+#Finds particular customer's record
+totalSalesPerMonth.filter(x => (x._1._2 == 10850)).collect.foreach(println)
+
