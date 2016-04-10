@@ -5,19 +5,25 @@
 val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
 val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
 
-#create tuple object with order_id, year and month from order_date and customer id
+#creating tuple object with order_id, year and month from order_date and customer id
 val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, (x(1).substring(0, 7), x(2).toInt)))
 
+#creating tuple object with order_id as key and bill amount as value
 val orderItemsMap = orderItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat))
 
+#Joining orders with orderItems
 val ordersJoin = ordersMap.join(orderItemsMap)
 
+#creating tuple object having order month as key and customer id as value and get the unique list
 val orderCustomersMap = ordersJoin.map(x => (x._2._1._1, x._2._1._2)).distinct
 
+#find total no. of months out from the collection
 val totalOrderMonths = orderCustomersMap.map(x => x._1).distinct.count
 
+#creating tuple object to find total visits by each customer for each month
 val customersMap = orderCustomersMap.map(x => (x._2, 1)).countByKey
 
+#finding customers who visited all months from the collection
 val repeatedCustomers = customersMap.filter(x => x._2 == totalOrderMonths)
 
 println("Total repeated customers: " + repeatedCustomers.size)

@@ -1,0 +1,78 @@
+#To find sales for each day, we need to join orders & order_items dataset
+#order_items dataset has sales for each order, orders dataset having order_date
+
+#Transformations used in this use-case: Map, Join, ReduceByKey, SortByKey
+#Actions used in this use-case: Take, ForEach, SaveAsTextFile
+
+####################### Using python #############################################
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+#creating tuple object with order_id and order_date
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), x[1]))
+
+#creating tuple object having order_id as key and bill amount as value
+orderItemsMap = orderItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+
+#joining orders with orderitems
+ordersJoin = ordersMap.join(orderItemsMap)
+
+#Forming another Tuple object having order_date as key and bill amount as value
+orderSalesMap = ordersJoin.map(lambda x: (x[1][0], x[1][1]))
+
+#using reduceByKey to find total sales for each date and then sorted it by date
+totalSalesEachDay = orderSalesMap.reduceByKey(lambda a, b: a + b).sortByKey()
+
+for i in totalSalesEachDay.collect():
+  print(i)
+
+#Saving the output into ordersSalesPerDay directory
+#It is important to make sure the target folder doesn't exists
+#If it exists, this method will fail
+totalSalesEachDay.saveAsTextFile("/home/cloudera/orderSalesPerDay")
+
+####################### Using spark-sql (SQLContext) ############################
+from pyspark import SQLContext, Row
+
+sqlContext = SQLContext(sc)
+
+sqlContext.sql("set spark.sql.shuffle.partitions=10")
+
+ordersMap = sc.textFile("/home/cloudera/orders.txt").map(lambda x: x.split(",")).map(lambda x: Row(order_id = int(x[0]), order_date = x[1]))
+
+ordersSchema = sqlContext.inferSchema(ordersMap)
+
+ordersSchema.registerTempTable("OrdersTbl")
+
+orderItemsMap = sc.textFile("/home/cloudera/order_items.txt").map(lambda x: x.split(",")).map(lambda x: Row(order_id = int(x[1]), order_item_subtotal = float(x[4])))
+
+orderItemsSchema = sqlContext.inferSchema(orderItemsMap)
+
+orderItemsSchema.registerTempTable("OrderItemsTbl")
+
+totalSalesPerDay = sqlContext.sql("select o.order_date, sum(oi.order_item_subtotal) from OrdersTbl o join OrderItemsTbl oi on o.order_id=oi.order_item_order_id group by o.order_date order by o.order_date")
+
+for i in totalSalesEachDay.take(5):
+  print(i)
+
+####################### Using Hive (HiveContext) ####################################
+#Pre-requisites: Table must be exists in Hive
+from pyspark import HiveContext
+
+val sqlContext = HiveContext(sc)
+
+sqlContext.sql("set spark.sql.shuffle.partitions=10")
+
+sqlContext.sql("use retail_db")
+
+totalSalesPerDay = sqlContext.sql("select o.order_date, sum(oi.order_item_subtotal) from orders o join order_items oi on o.order_id=oi.order_item_order_id group by o.order_date order by o.order_date")
+
+for i in totalSalesEachDay.take(5):
+  print(i)
+
+#Validation Script (Using Sqoop Eval)
+sqoop eval \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--query "select o.order_date, sum(oi.order_item_subtotal) from orders o join order_items oi on o.order_id=oi.order_item_order_id group by o.order_date order by o.order_date"

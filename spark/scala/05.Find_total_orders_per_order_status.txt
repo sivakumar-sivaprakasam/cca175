@@ -8,19 +8,29 @@
 val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
 val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
 
+#creating tuple object with order_id as key and order_status as value
 val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, x(3)))
+
+#creating tuple object with order_id as key and order_product_id as value
 val orderItemsMap = orderItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(2).toInt))
 
+#joining orders with orderitems
 val ordersJoinedMap = orderItemsMap.join(ordersMap)
 
+#creating tuple object by having order_status as key and 1 as value
 val orderStatusMap = ordersJoinedMap.map(x => (x._2._2, 1))
 
+#Using countByKey to find total orders for each order_status
 orderStatusMap.countByKey.foreach(println)
 
+#Using groupByKey to find total orders for each order_status
 orderStatusMap.groupByKey().map(x => (x._1, x._2.sum)).foreach(println)
 
+#Using reduceByKey to find total orders for each order_status
 orderStatusMap.reduceByKey((a, b) => a + b).foreach(println)
 
+#Using combineByKey to find total orders for each order_status.
+#With combineByKey we can define the initial value for each accumulator
 orderStatusMap.combineByKey(value => 1, (acc: Int, value) => acc + value, (acc1: Int, acc2: Int) => acc1 + acc2).foreach(println)
 
 ####################### Using spark-sql (SQLContext) ############################

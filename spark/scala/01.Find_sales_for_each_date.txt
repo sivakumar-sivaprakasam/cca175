@@ -8,19 +8,26 @@
 val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
 val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
 
-#create tuple object with order_id and order_date
+#creating tuple object with order_id and order_date
 val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, x(1)))
 
+#creating tuple object having order_id as key and bill amount as value
 val orderItemsMap = orderItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat))
 
+#joining orders with orderitems
 val ordersJoin = ordersMap.join(orderItemsMap)
 
+#Forming another Tuple object having order_date as key and bill amount as value
 val orderSalesMap = ordersJoin.map(x => (x._2._1, x._2._2))
 
+#using reduceByKey to find total sales for each date and then sorted it by date
 val totalSalesEachDay = orderSalesMap.reduceByKey((a, b) => (a + b)).sortByKey()
 
 totalSalesEachDay.foreach(println)
 
+#Saving the output into ordersSalesPerDay directory
+#It is important to make sure the target folder doesn't exists
+#If it exists, this method will fail
 totalSalesEachDay.saveAsTextFile("/home/cloudera/orderSalesPerDay")
 
 ####################### Using spark-sql (SQLContext) ############################

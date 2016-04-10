@@ -1,0 +1,31 @@
+#Find most sold products for each day/month
+#We need to join order and order_items 
+
+####################### Using scala #############################################
+val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+val ordersMap = ordersRDD.map(x => (x.split(",")(0).toInt, x))
+val orderItemsMap = orderItemsRDD.map(x => (x.split(",")(1).toInt, x))
+
+#Joining orders with orderItems
+val ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+#Forming Tuple object having Date+ProductId as Key and 1 as Value
+val orderProductsMap = ordersJoinedMap.map(x => ((x._2._1.split(",")(1), x._2._2.split(",")(2).toInt), 1))
+
+#Sum up the key to find total no. of times the product bought for each day
+val ordersProductsPerDay = orderProductsMap.reduceByKey(_ + _)
+
+#Remapping them to form the target Tuple object
+val orderProductsByTotalMap = ordersProductsPerDay.map(x => (x._1._1, (x._1._2, x._2)))
+
+#This function sort all items in descending order.
+#If you want to sort by ascending order then remove the "-" sign 
+def sortByProducts(x: (String, Iterable[(Int, Int)])): Iterable[(Int, Int)] = {
+	 val retList: List[(Int, Int)] = x._2.toList.sortBy(k => -k._2)
+	 return retList
+}
+
+#Calling sortByProducts to sort products by its count for each day in descending order
+val mostSoldProductsMapForEachDay = orderProductsByTotalMap.groupByKey().map(x => (x._1, sortByProducts(x)))

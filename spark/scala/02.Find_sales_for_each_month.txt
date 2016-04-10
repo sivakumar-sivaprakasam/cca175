@@ -9,20 +9,27 @@
 val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
 val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
 
-#create tuple object with order_id and year and month from order_date
+#creating tuple object with order_id and year and month from order_date
 val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, x(1).substring(0, 7)))
 
+#creating tuple object having order_id as key and bill amount as value
 val orderItemsMap = orderItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat))
 
+#joining orders with orderitems
 val ordersJoin = ordersMap.join(orderItemsMap)
 
+#Forming another Tuple object having order month as key and bill amount as value
 val orderSalesMap = ordersJoin.map(x => (x._2._1, x._2._2))
 
-val totalSalesEachDay = orderSalesMap.reduceByKey((a, b) => (a + b)).sortByKey()
+#using reduceByKey to find total sales for each month and then sorted it 
+val totalSalesPerMonth = orderSalesMap.reduceByKey((a, b) => (a + b)).sortByKey()
 
-totalSalesEachDay.foreach(println)
+totalSalesPerMonth.foreach(println)
 
-totalSalesEachDay.saveAsTextFile("/home/cloudera/orderSalesPerDay")
+#Saving the output into orderSalesPerMonth directory
+#It is important to make sure the target folder doesn't exists
+#If it exists, this method will fail
+totalSalesPerMonth.saveAsTextFile("/home/cloudera/orderSalesPerMonth")
 
 ####################### Using spark-sql (SQLContext) ############################
 import org.apache.spark.sql.{SQLContext, Row}
@@ -45,9 +52,9 @@ ordersMap.registerTempTable("OrdersTbl")
 
 orderItemsMap.registerTempTable("OrderItemsTbl")
 
-val totalSalesPerDay = sqlContext.sql("select o.order_date, sum(oi.order_item_subtotal) from OrdersTbl o join OrderItemsTbl oi on o.order_id=oi.order_item_order_id group by o.order_date order by o.order_date")
+val totalSalesPerMonth = sqlContext.sql("select o.order_date, sum(oi.order_item_subtotal) from OrdersTbl o join OrderItemsTbl oi on o.order_id=oi.order_item_order_id group by o.order_date order by o.order_date")
 
-totalSalesPerDay.take(5).foreach(println)
+totalSalesPerMonth.take(5).foreach(println)
 
 ####################### Using Hive (HiveContext) ####################################
 #Pre-requisites: Table must be exists in Hive
@@ -59,9 +66,9 @@ sqlContext.sql("set spark.sql.shuffle.partitions=10")
 
 sqlContext.sql("use retail_db")
 
-val totalSalesPerDay = sqlContext.sql("select substring(o.order_date, 1, 7), sum(oi.order_item_subtotal) from orders o join order_items oi on o.order_id=oi.order_item_order_id group by substring(o.order_date, 1, 7) order by substring(o.order_date, 1, 7)")
+val totalSalesPerMonth = sqlContext.sql("select substring(o.order_date, 1, 7), sum(oi.order_item_subtotal) from orders o join order_items oi on o.order_id=oi.order_item_order_id group by substring(o.order_date, 1, 7) order by substring(o.order_date, 1, 7)")
 
-totalSalesPerDay.take(5).foreach(println)
+totalSalesPerMonth.take(5).foreach(println)
 
 #Validation Script (Using Sqoop Eval)
 sqoop eval \
