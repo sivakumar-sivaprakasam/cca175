@@ -1,0 +1,65 @@
+#Find total orders per order status for each date/month
+
+#Transformations used in this use-case: Map, Join, ReduceByKey, SortByKey
+#Actions used in this use-case: Collect, ForEach
+
+####################### Using scala #############################################
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+#If we need to find the total orders per order status for each month, just add substring method & extract yyyy-mm
+
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), (x[1], x[3])))
+orderItemsMap = orderItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), int(x[2])))
+
+ordersJoinedMap = orderItemsMap.join(ordersMap)
+
+ordersStatusMap = ordersJoinedMap.map(lambda x: ((x[1][1][0], x[1][1][1]), 1))
+
+ordersStatusAggregated = ordersStatusMap.reduceByKey(lambda a, b: a + b).sortByKey()
+
+for i in ordersStatusAggregated.collect(): print(i)
+
+####################### Using spark-sql (SQLContext) ############################
+from pyspark.sql import SQLContext, Row
+
+sqlContext = SQLContext(sc)
+
+sqlContext.sql("set spark.sql.shuffle.partitions=10")
+
+ordersMap = sc.textFile("/home/cloudera/orders.txt").map(lambda x: x.split(",")).map(lambda x: Row(order_id = int(x[0]), order_date = x[1], order_status = x[3]))
+
+orderItemsMap = sc.textFile("/home/cloudera/order_items.txt").map(lambda x: x.split(",")).map(lambda x: Row(order_id = int(x[1]), order_total = float(x[4])))
+
+ordersSchema = sqlContext.inferSchema(ordersMap)
+
+orderItemsSchema = sqlContext.inferSchema(orderItemsMap)
+
+ordersSchema.registerTempTable("OrdersTbl")
+
+orderItemsSchema.registerTempTable("OrderItemsTbl")
+
+totalOrdersPerOrderStatusPerDate = sqlContext.sql("select o.order_date, o.order_status, count(1) from OrdersTbl o join OrderItemsTbl oi on o.order_id=oi.order_id group by o.order_date, o.order_status order by o.order_date, o.order_status")
+
+for i in totalOrdersPerOrderStatusPerDate.collect(): print(i)
+
+####################### Using Hive (HiveContext) ####################################
+#Pre-requisites: Table must be exists in Hive
+from pyspark.sql import HiveContext
+
+sqlContext = HiveContext(sc)
+
+sqlContext.sql("set spark.sql.shuffle.partitions=10")
+
+sqlContext.sql("use retail_db")
+
+totalOrdersPerOrderStatusPerDate = sqlContext.sql("select o.order_date, o.order_status, count(1) from orders o join order_items oi on o.order_id=oi.order_item_order_id group by o.order_date, o.order_status order by o.order_date, o.order_status")
+
+for i in totalOrdersPerOrderStatusPerDate.collect(): print(i)
+
+#Validation Script (Using Sqoop Eval)
+sqoop eval \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--query "select o.order_date, o.order_status, count(1) from orders o join order_items oi on o.order_id=oi.order_item_order_id group by o.order_date, o.order_status order by o.order_date, o.order_status"

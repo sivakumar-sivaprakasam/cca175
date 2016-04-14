@@ -1,0 +1,80 @@
+#Find total orders per order status
+#Tried to implement this use case using various Key transformations available
+
+#Transformations used in this use-case: Map, Join, CountByKey, GroupByKey, ReduceByKey, CombineByKey
+#Actions used in this use-case: ForEach
+
+####################### Using python #############################################
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+#creating tuple object with order_id as key and order_status as value
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), x[3]))
+
+#creating tuple object with order_id as key and order_product_id as value
+orderItemsMap = orderItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), int(x[2])))
+
+#joining orders with orderitems
+ordersJoinedMap = orderItemsMap.join(ordersMap)
+
+#creating tuple object by having order_status as key and 1 as value
+orderStatusMap = ordersJoinedMap.map(lambda x: (x[1][1], 1))
+
+#Using countByKey to find total orders for each order_status
+results = orderStatusMap.countByKey()
+for i in results: 
+	print i, results[i]
+
+#Using groupByKey to find total orders for each order_status
+for i in orderStatusMap.groupByKey().map(lambda x: (x[0], sum(x[1]))).collect(): print(i)
+
+#Using reduceByKey to find total orders for each order_status
+for i in orderStatusMap.reduceByKey(lambda a, b: a + b).collect(): print(i)
+
+#Using combineByKey to find total orders for each order_status.
+#With combineByKey we can define the initial value for each accumulator
+for i in orderStatusMap.combineByKey(lambda value: 1, lambda acc, value: acc + value, lambda acc1, acc2: acc1 + acc2).collect(): print(i)
+
+####################### Using spark-sql (SQLContext) ############################
+from pyspark.sql import SQLContext, Row
+
+sqlContext = SQLContext(sc)
+
+sqlContext.sql("set spark.sql.shuffle.partitions=10")
+
+ordersMap = sc.textFile("/home/cloudera/orders.txt").map(lambda x: x.split(",")).map(lambda x: Row(order_id = int(x[0]), order_status = x[3]))
+
+orderItemsMap = sc.textFile("/home/cloudera/order_items.txt").map(lambda x: x.split(",")).map(lambda x: Row(order_id = int(x[1]), order_total = float(x[4])))
+
+ordersSchema = sqlContext.inferSchema(ordersMap)
+
+orderItemsSchema = sqlContext.inferSchema(orderItemsMap)
+
+ordersSchema.registerTempTable("OrdersTbl")
+
+orderItemsSchema.registerTempTable("OrderItemsTbl")
+
+totalOrdersPerOrderStatus = sqlContext.sql("select o.order_status, count(1) total from OrdersTbl o join OrderItemsTbl oi on o.order_id=oi.order_id group by o.order_status order by o.order_status")
+
+for i in totalOrdersPerOrderStatus.collect(): print(i)
+
+####################### Using Hive (HiveContext) ####################################
+#Pre-requisites: Table must be exists in Hive
+from pyspark.sql import HiveContext
+
+sqlContext = HiveContext(sc)
+
+sqlContext.sql("set spark.sql.shuffle.partitions=10")
+
+sqlContext.sql("use retail_db")
+
+totalOrdersPerOrderStatus = sqlContext.sql("select o.order_status, count(1) total from orders o join order_items oi on o.order_id=oi.order_item_order_id group by o.order_status order by o.order_status")
+
+for i in totalOrdersPerOrderStatus.collect(): print(i)
+
+#Validation Script (Using Sqoop Eval)
+sqoop eval \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--query "select o.order_status, count(1) from orders o join order_items oi on o.order_id=oi.order_item_order_id group by o.order_status order by o.order_status"

@@ -1,0 +1,74 @@
+#To find average sales for each month, we need to join orders & order_items dataset
+#order_items dataset has sales for each order, orders dataset having order_date
+#To find month, we can use substring to get year & month
+
+#Transformations used in this use-case: Map, Join, AggregateByKey
+#Actions used in this use-case: Take, ForEach, Collect
+
+####################### Using python #############################################
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+#creating tuple object with order_id and year and month from order_date 
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), x[1][0: 7]))
+
+#creating tuple object having order_id as key and bill amount as value
+orderItemsMap = orderItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+
+#joining orders with orderitems
+ordersJoin = ordersMap.join(orderItemsMap)
+
+#Forming another Tuple object having order month as key and bill amount as value
+orderSalesMap = ordersJoin.map(lambda x: (x[1][0], x[1][1]))
+
+#using aggregateByKey to get total orders and sales for each month
+salesPerMonth = orderSalesMap.aggregateByKey((0.0, 0), lambda acc, revenue: (acc[0] + revenue, acc[1] + 1), lambda total1, total2: (total1[0] + total2[0], total1[1] + total2[1]))
+
+#using total orders and sales amount to get the average sales for each month
+avgSalesPerMonth = salesPerMonth.map(lambda x: (x[0], x[1][0]/x[1][1])) 
+
+for i in avgSalesPerMonth.collect(): print(i)
+
+####################### Using spark-sql (SQLContext) ############################
+from pyspark.sql import SQLContext, Row
+
+sqlContext = SQLContext(sc)
+
+sqlContext.sql("set spark.sql.shuffle.partitions=10")
+
+ordersMap = sc.textFile("/home/cloudera/orders.txt").map(lambda x: x.split(",")).map(lambda x: Row(order_id = int(x[0]), order_date = x[1][0: 7]))
+
+orderItemsMap = sc.textFile("/home/cloudera/order_items.txt").map(lambda x: x.split(",")).map(lambda x: Row(order_id = int(x[1]), order_total = float(x[4])))
+
+ordersSchema = sqlContext.inferSchema(ordersMap)
+
+orderItemsSchema = sqlContext.inferSchema(orderItemsMap)
+
+ordersSchema.registerTempTable("OrdersTbl")
+
+orderItemsSchema.registerTempTable("OrderItemsTbl")
+
+avgSalesPerMonth = sqlContext.sql("select o.order_date, avg(oi.order_total) from OrdersTbl o join OrderItemsTbl oi on o.order_id=oi.order_id group by o.order_date order by o.order_date")
+
+for i in avgSalesPerMonth.collect(): print(i)
+
+####################### Using Hive (HiveContext) ####################################
+#Pre-requisites: Table must be exists in Hive
+from pyspark.sql import HiveContext
+
+sqlContext = HiveContext(sc)
+
+sqlContext.sql("set spark.sql.shuffle.partitions=10")
+
+sqlContext.sql("use retail_db")
+
+avgSalesPerMonth = sqlContext.sql("select o.orderDate, avg(oi.order_item_subtotal) avgSales from (select order_id, substring(order_date, 1, 7) orderDate from orders) o join order_items oi on o.order_id=oi.order_item_order_id group by o.orderDate order by o.orderDate")
+
+for i in avgSalesPerMonth.collect(): print(i)
+
+#Validation Script (Using Sqoop Eval)
+sqoop eval \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--query "select substring(o.order_date, 1, 7) odate, avg(oi.order_item_subtotal) from orders o join order_items oi on o.order_id=oi.order_item_order_id group by odate order by odate"
