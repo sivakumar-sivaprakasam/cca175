@@ -5,7 +5,7 @@
 #Transformations used in this use-case: Map, Join, ReduceByKey, SortByKey
 #Actions used in this use-case: Take, ForEach, SaveAsTextFile
 
-####################### Using scala #############################################
+####################### Using python #############################################
 ordersRDD = sc.textFile("/home/cloudera/orders.txt")
 orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
 

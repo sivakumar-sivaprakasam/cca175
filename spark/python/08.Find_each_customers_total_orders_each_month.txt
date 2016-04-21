@@ -1,0 +1,24 @@
+#Find each customers total orders, sales for each date/month
+
+#Transformations used in this use-case: Map, Join, AggregateByKey, SortByKey, Filter
+#Actions used in this use-case: ForEach, Collect
+
+####################### Using python #############################################
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+#If we need to find the total orders & sales for each customers each day, remove the substring method...
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), (x[1][0: 7], int(x[2]))))
+orderItemsMap = orderItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+
+ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+orderCustomersMap = ordersJoinedMap.map(lambda x: (x[1][0], x[1][1]))
+
+totalSalesPerMonth = orderCustomersMap.aggregateByKey((0.0, 0),  lambda acc, revenue: (acc[0] + revenue, acc[1] + 1), lambda total1, total2: (total1[0] + total2[0], total1[1] + total2[1])).sortByKey()
+
+for i in totalSalesPerMonth.collect(): print(i)
+
+#Finds particular customer's record
+for i in totalSalesPerMonth.filter(lambda x: (x[0][1] == 10850)).collect(): print(i)
+

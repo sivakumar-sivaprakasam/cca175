@@ -1,0 +1,31 @@
+#Find most sold products for each day/month
+#We need to join order and order_items 
+
+####################### Using python #############################################
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+ordersMap = ordersRDD.map(lambda x: (int(x.split(",")[0]), x))
+orderItemsMap = orderItemsRDD.map(lambda x: (int(x.split(",")[1]), x))
+
+#Joining orders with orderItems
+ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+#Forming Tuple object having Date+ProductId as Key and 1 as Value
+orderProductsMap = ordersJoinedMap.map(lambda x: ((x[1][0].split(",")[1], int(x[1][1].split(",")[2])), 1))
+
+#Sum up the key to find total no. of times the product bought for each day
+ordersProductsPerDay = orderProductsMap.reduceByKey(lambda a, b: a + b)
+
+#Remapping them to form the target Tuple object
+orderProductsByTotalMap = ordersProductsPerDay.map(lambda x: (x[0][0], (x[0][1], x[1])))
+
+#This function sort all items in descending order.
+#If you want to sort by ascending order then remove the "-" sign 
+def sortByProducts(x):
+	retList = []
+	retList = list(sorted(x, key = lambda k: k[1], reverse=True))
+	return retList
+
+#Calling sortByProducts to sort products by its count for each day in descending order
+mostSoldProductsMapForEachDay = orderProductsByTotalMap.groupByKey().map(lambda x: (x[0], sortByProducts(x[1])))

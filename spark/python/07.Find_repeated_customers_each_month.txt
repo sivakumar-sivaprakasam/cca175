@@ -1,0 +1,40 @@
+#Find repeated customers for each month
+#A customer exists in each month is treated as repeated customer
+
+####################### Using python #############################################
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+#creating tuple object with order_id, year and month from order_date and customer id
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), (x[1][0: 7], int(x[2]))))
+
+#creating tuple object with order_id as key and bill amount as value
+orderItemsMap = orderItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+
+#Joining orders with orderItems
+ordersJoin = ordersMap.join(orderItemsMap)
+
+#creating tuple object having order month as key and customer id as value and get the unique list
+orderCustomersMap = ordersJoin.map(lambda x: (x[1][0][0], x[1][0][1])).distinct()
+
+#find total no. of months out from the collection
+totalOrderMonths = orderCustomersMap.map(lambda x: x[0]).distinct().count()
+
+#creating tuple object to find total visits by each customer for each month
+customersMap = orderCustomersMap.map(lambda x: (x[1], 1)).countByKey()
+
+#finding customers who visited all months from the collection
+for (k, v) in filter(lambda x: x[1] == totalOrderMonths, customersMap.items()): print k, "-->", v
+
+#To get customers first & last name
+repeatedCustomersMap = orderCustomersMap.map(lambda x: (x[1], 1)).reduceByKey(lambda a, b: a + b).filter(lambda x: x[1] == totalOrderMonths)
+
+customersRDD = sc.textFile("/home/cloudera/customers.txt")
+
+customersMap = customersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), (x[1], x[2])))
+
+repeatedCustomersJoin = customersMap.join(repeatedCustomersMap)
+
+repeatedCustomersDetails = repeatedCustomersJoin.map(lambda x: x[1][0][0]+ " " + x[1][0][1])
+
+for i in repeatedCustomersDetails.collect(): print(i)
