@@ -1,0 +1,189 @@
+# Load data from HDFS and store results back to HDFS using Spark
+# 1	- Reading & Storing file in HDFS
+# When pyspark launched without any further argument, 
+# by default for all the files, spark will look for the same in local filesystem
+# In case if it is stored in HDFS, you need to explicitely specify the HDFS path
+
+ordersRDD = sc.textFile("orders.txt")
+ordersRDD.count()
+for i in ordersRDD.take(5): print(i)
+
+ordersRDD.saveAsTextFile("orders_python")
+
+# 2	- Reading file from local & writing the same back to HDFS
+# In this example, we're reading file stored in local file system path 
+# and then writing the same into HDFS
+
+ordersRDD = sc.textFile("hdfs://quickstart.cloudera/user/cloudera/orders.txt")
+ordersRDD.count()
+for i in ordersRDD.take(5): print(i)
+
+ordersRDD.saveAsTextFile("hdfs://quickstart.cloudera/user/cloudera/orders_python")
+
+####################################################################
+
+# Join disparate datasets together using Spark
+# 1	- Join 2 different datasets using all possible join options
+
+ordersRDD = sc.textFile("orders.txt")
+ordersItemsRDD = sc.textFile("order_items.txt")
+ordersRDD.count()
+ordersItemsRDD.count()
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), x[1]))
+for i in ordersMap.take(5): print(i)
+
+ordersItemsMap = ordersItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+for i in ordersItemsMap.take(5): print(i)
+
+ordersJoinedMap = ordersMap.join(ordersItemsMap)
+ordersJoinedMap.count() # Result: 172198
+
+ordersJoinedMap = ordersMap.leftOuterJoin(ordersItemsMap)
+ordersJoinedMap.count() # Result: 183650
+
+ordersJoinedMap = ordersMap.rightOuterJoin(ordersItemsMap)
+ordersJoinedMap.count() # Result: 172198
+
+ordersJoinedMap = ordersMap.rightOuterJoin(ordersItemsMap)
+ordersJoinedMap.count() # Result: 172198
+
+ordersJoinedMap = ordersMap.fullOuterJoin(ordersItemsMap)
+ordersJoinedMap.count() # Result: 183650
+
+####################################################################
+
+# Calculate aggregate statistics (e.g., average or sum) using Spark
+# 1	- Calculate sum of COMPLETED orders for each day and find average sales for each day
+
+ordersRDD = sc.textFile("orders.txt")
+ordersMap = ordersRDD.map(lambda x: x.split(",")).filter(lambda x: x[3] == "COMPLETE").map(lambda x: (int(x[0]), x[1]))
+ordersItemsRDD = sc.textFile("order_items.txt")
+orderItemsMap = ordersItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+ordersDateMap = ordersJoinedMap.map(lambda x: (x[1][0], 1)).reduceByKey(lambda a, b: (a+b))
+ordersSalesMap = ordersJoinedMap.map(lambda x: (x[1][0], x[1][1])).reduceByKey(lambda a, b: (a+b))
+beforeAvgMap = ordersDateMap.join(ordersSalesMap)
+resultMap = beforeAvgMap.map(lambda x: (x[0], (x[1][0], (x[1][1], x[1][1]/x[1][0])))).sortByKey()
+for i in resultMap.take(5): print(i)
+
+# 2	- Alternative approach using aggregateByKey
+
+ordersRDD = sc.textFile("orders.txt")
+ordersMap = ordersRDD.map(lambda x: x.split(",")).filter(lambda x: x[3] == "COMPLETE").map(lambda x: (int(x[0]), x[1]))
+ordersItemsRDD = sc.textFile("order_items.txt")
+orderItemsMap = ordersItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+orderSalesMap = ordersJoinedMap.map(lambda x: (x[1][0], x[1][1]))
+salesPerDay = orderSalesMap.aggregateByKey((0.0, 0), lambda acc, revenue: (acc[0] + revenue, acc[1] + 1), lambda total1, total2: (total1[0] + total2[0], total1[1] + total2[1]))
+avgSalesPerDay = salesPerDay.map(lambda x: (x[0], (x[1][1], (x[1][0], x[1][0]/x[1][1])))).sortByKey()
+for i in avgSalesPerDay.take(5): print(i)
+
+####################################################################
+
+# Filter data into a smaller dataset using Spark
+# 1 	- Filtering orders dataset
+
+ordersRDD = sc.textFile("orders.txt")
+ordersMap = ordersRDD.map(lambda x: x.split(",")).filter(lambda x: x[3] == "COMPLETE").map(lambda x: (int(x[0]), x[1]))
+for i in ordersMap.take(5): print(i)
+
+ordersMap = ordersRDD.map(lambda x: x.split(",")).filter(lambda x: x[3] == "COMPLETE" and x[1].startswith("2014-07")).map(lambda x: (int(x[0]), x[1]))
+for i in ordersMap.take(5): print(i)
+
+####################################################################
+
+# Write a query that produces ranked or sorted data using Spark
+# 1	- Sorting orders status by its total no. in descending 
+
+ordersRDD = sc.textFile("orders.txt")
+orderItemsRDD = sc.textFile("order_items.txt")
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), x[3]))
+orderItemsMap = orderItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+orderJoinedMap = ordersMap.join(orderItemsMap)
+orderStatusMap = orderJoinedMap.map(lambda x: (x[1][0], 1)).reduceByKey(lambda a, b: a+b).sortBy(lambda x: -x[1])
+for i in orderStatusMap.collect(): print(i)
+
+# 2	- Sorting orders status by its total sales in descending 
+
+ordersRDD = sc.textFile("orders.txt")
+orderItemsRDD = sc.textFile("order_items.txt")
+ordersMap = ordersRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[0]), x[3]))
+orderItemsMap = orderItemsRDD.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+orderJoinedMap = ordersMap.join(orderItemsMap)
+orderStatusMap = orderJoinedMap.map(lambda x: (x[1][0], x[1][1])).reduceByKey(lambda a, b: a+b).sortBy(lambda x: -x[1])
+for i in orderStatusMap.collect(): print(i)
+
+# 3	- Max priced product from each category
+
+productsRDD = sc.textFile("products.txt")
+productsMap = productsRDD.map(lambda x: (int(x.split(",")[1]), x))
+
+def getTopOne(rec):
+	retList = []
+	retList = (rec[0], list(sorted(rec[1], key = lambda k: float(k.split(",")[4]), reverse=True)))
+	return retList[1]
+
+
+productsGroupBy = productsMap.groupByKey().map(lambda x: getTopOne(x)).collect()
+
+for i in sorted(productsGroupBy): print(i)
+
+# 4	- All products having max priced from each category
+
+def getTopOne(rec): 
+	x = []
+	topPrice = 0
+	for i in rec[1]:
+		tempPrice = float(i.split(",")[4])
+		if (tempPrice > topPrice):
+			topPrice = tempPrice
+	for i in rec[1]:
+		if (float(i.split(",")[4]) == topPrice):
+			x.append(i)
+	return (y for y in x)
+
+productsRDD = sc.textFile("products.txt")
+productsMap = productsRDD.map(lambda x: (int(x.split(",")[1]), x))
+productsGroupBy = productsMap.groupByKey().flatMap(getTopOne).collect()
+for i in productsGroupBy: print(i)
+	
+# 5	- Max purchased customers from each month
+
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+ordersMap = ordersRDD.map(lambda x: (int(x.split(",")[0]), x))
+orderItemsMap = orderItemsRDD.map(lambda x: (int(x.split(",")[1]), x))
+ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+customerSalesPerMonth = ordersJoinedMap.map(lambda x: ((x[1][0].split(",")[1][0: 7], int(x[1][0].split(",")[2])), float(x[1][1].split(",")[4]))).reduceByKey(lambda a, b: a+b).map(lambda x: (x[0][0], (x[0][1], x[1])))
+
+def getMaxPurchase(rec, topN):
+	retList = []
+	retList = list(sorted(rec, key=lambda k: k[1], reverse=True))
+	return retList[0:topN]
+
+for i in customerSalesPerMonth.groupByKey().map(lambda x: (x[0], getMaxPurchase(x[1], 3))).collect(): print(i)
+
+# 6	- Max sold product from each month
+
+ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+ordersMap = ordersRDD.map(lambda x: (int(x.split(",")[0]), x))
+orderItemsMap = orderItemsRDD.map(lambda x: (int(x.split(",")[1]), x))
+ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+productsSalesPerMonth = ordersJoinedMap.map(lambda x: ((x[1][0].split(",")[1][0:7], int(x[1][1].split(",")[2])), float(x[1][1].split(",")[4]))).reduceByKey(lambda a, b: a+b).map(lambda x: (x[0][0], (x[0][1], x[1])))
+
+def getMaxSold(rec, topN):
+	retList = []
+	retList = list(sorted(rec, key=lambda k: k[1], reverse=True))
+	return retList[0:topN]
+
+for i in productsSalesPerMonth.groupByKey().map(lambda x: (x[0], getMaxSold(x[1], 3))).takeOrdered(20): print(i)
+
+####################################################################
+
