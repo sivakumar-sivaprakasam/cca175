@@ -1,0 +1,91 @@
+#Steps to Import data into Hive using Avro schema
+#1. Get Avro schema using either sqoop import-all-tables for all tables  or sqoop import for single table
+#2. Step 1 will create .avsc file in the local working folder
+#3. Using hdfs -copyFromLocal or -put to copy the .avsc from local working folder to HDFS
+#4. Login to Hive, using the schema in HDFS to create table
+
+#Step-1. Using sqoop import-all-tables command & avrodatafile format copying data into HDFS
+#This command will create .avsc file into the local working folder
+sqoop import-all-tables \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--as-avrodatafile \
+--warehouse-dir=/user/cloudera 
+
+#Step-2. Copying *.avsc files from local folder into HDFS
+hdfs dfs -copyFromLocal *.avsc /user/cloudera
+
+#Step-3. In Hive, using the .avsc file creating the table as EXTERNAL
+CREATE EXTERNAL TABLE orders 
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe' 
+STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat' 
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat' 
+LOCATION 'hdfs:///user/cloudera/orders' 
+TBLPROPERTIES ('avro.schema.url'='hdfs:///user/cloudera/sqoop_import_orders.avsc');
+
+#Step-3. In Hive, using the .avsc file creating the table as EXTERNAL
+#Instead of using the fully qualified SerDe class, we can use AVRO
+CREATE EXTERNAL TABLE orders 
+STORED AS AVRO
+LOCATION 'hdfs:///user/cloudera/orders' 
+TBLPROPERTIES ('avro.schema.url'='hdfs:///user/cloudera/sqoop_import_orders.avsc');
+
+#Alternate to Step 3, we can use the schema literal to specify the schema in-line
+#To get the schema literal, we can use avro-tools or get the schema from .avsc file 
+CREATE EXTERNAL TABLE orders 
+STORED AS AVRO
+LOCATION 'hdfs:///user/cloudera/orders' 
+TBLPROPERTIES ('avro.schema.literal'='
+{
+  "type" : "record",
+  "name" : "sqoop_import_orders",
+  "doc" : "Sqoop import of orders",
+  "fields" : [ {
+    "name" : "order_id",
+    "type" : [ "int", "null" ],
+    "columnName" : "order_id",
+    "sqlType" : "4"
+  }, {
+    "name" : "order_date",
+    "type" : [ "long", "null" ],
+    "columnName" : "order_date",
+    "sqlType" : "93"
+  }, {
+    "name" : "order_customer_id",
+    "type" : [ "int", "null" ],
+    "columnName" : "order_customer_id",
+    "sqlType" : "4"
+  }, {
+    "name" : "order_status",
+    "type" : [ "string", "null" ],
+    "columnName" : "order_status",
+    "sqlType" : "12"
+  } ],
+  "tableName" : "orders"
+}
+');
+
+#Using partition column
+#We can define in-line field list or load them thru external schema file
+CREATE EXTERNAL TABLE orders_part 
+partitioned by (order_month string)
+STORED AS AVRO
+TBLPROPERTIES ('avro.schema.url'='hdfs:///user/cloudera/sqoop_import_orders.avsc');
+
+#Creating each and every partition individually
+alter table orders_part add partition (order_month='2014-01');
+
+#Populating data for the newly created partition
+insert into orders_part partition(order_month='2013-07') 
+select order_id, order_date, order_customer_id, order_status from orders where from_unixtime(cast(substr(order_date, 1, 10) as int)) like '2013-07%';
+
+#Drop partition
+alter table orders_part drop partition (order_month='2013-07');
+
+#Populate data into orders_part table with dynamic partition
+insert into orders_part partition (order_month) 
+select order_id, order_date, order_customer_id, order_status, substr(from_unixtime(cast(substr(order_date, 1, 10) as int)), 1, 7) order_month from orders;
+
+#Some queries on the partition
+select order_month, count(*) from orders_part group by order_month;

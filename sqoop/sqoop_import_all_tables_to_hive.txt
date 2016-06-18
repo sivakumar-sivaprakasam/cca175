@@ -25,6 +25,8 @@ hadoop fs -rm -R /user/cloudera/orders
 hadoop fs -rm -R /user/cloudera/products
 
 #Import all tables from MySQL database retail_db into Hive default database
+#We cannot use --hive-import and --as-avrodatafile or --as-sequencefile together
+#Hive import doesn't compatible with Avro or Sequence format
 sqoop import-all-tables \
 --connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
 --username retail_dba \
@@ -58,3 +60,11 @@ sqoop import-all-tables \
 --create-hive-table \
 --hive-overwrite \
 --hive-database retail_db
+
+sqoop import-all-tables \ 
+-m 5 \ 
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \ 
+--username=retail_dba \ 
+--password=cloudera \ 
+--as-avrodatafile \ 
+--warehouse-dir=/user/hive/warehouse/retail_db.db 

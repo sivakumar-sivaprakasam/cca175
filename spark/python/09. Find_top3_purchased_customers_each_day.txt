@@ -8,23 +8,21 @@ orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
 
 ordersMap = ordersRDD.map(lambda x: (int(x.split(",")[0]), x))
 orderItemsMap = orderItemsRDD.map(lambda x: (int(x.split(",")[1]), x))
-
-#Joining orders with orderItems
 ordersJoinedMap = ordersMap.join(orderItemsMap)
 
-#Creating tuple object having Date as key and order value and customer id as value tuple
-ordersCustomerMap = ordersJoinedMap.map(lambda x: (x[1][0].split(",")[1], (float(x[1][1].split(",")[4]), int(x[1][0].split(",")[2]))))
+orderTotalPerDayPerCustomerMap = ordersJoinedMap.map(lambda x: ((int(x[1][0].split(",")[2]), x[1][0].split(",")[1]), float(x[1][1].split(",")[4]))).reduceByKey(lambda a, b: a+b).map(lambda x: (x[0][1], (x[0][0], x[1])))
+
+ordersMapByCustomers = orderTotalPerDayPerCustomerMap.map(lambda x: (x[0], (x[1][0], x[1][1])))
 
 #Defining a function that will return TopN items from the given collection
 #This function takes Tuple object as input which is having OrderItem sub-total & Order Customer Id
 #To find TopN purchased customers, we need to sort the total sales for each item by descending order
 #Total sales for each order can be found in OrderItems (4th element)
 def getTopItems(x, topNItems): 
-	retList = []
-	retList = list(sorted(x, key = lambda k: k[0], reverse=True))
-	return list(retList[0:topNItems])
+	 retList = []
+	 retList = list(sorted(x, key = lambda k: k[1], reverse=True))
+	 return list(retList[0:topNItems])
 
-#ordersCustomerMap.groupByKey().map(lambda x: (x[0], list(sorted(x[1], key=lambda k: k[0], reverse=True)))).take(1)
 
-for i in ordersCustomerMap.groupByKey().map(lambda x: (x[0], getTopItems(x[1], 3))).collect(): print(i)
-#for i in ordersCustomerMap.groupByKey().map(lambda x: (x[0], getTopItems(x, 3))).sortByKey().collect(): print(i)
+for i in ordersMapByCustomers.groupByKey().map(lambda x: (x[0], getTopItems(x[1], 3))).takeOrdered(5): print(i)
+for i in ordersMapByCustomers.groupByKey().map(lambda x: (x[0], getTopItems(x[1], 3))).sortByKey(): print(i)

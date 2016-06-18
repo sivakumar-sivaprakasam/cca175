@@ -21,3 +21,13 @@ sqoop import-all-tables \
 --password cloudera \
 --as-textfile \
 --warehouse-dir=/user/cloudera
+
+#Import all tables from MySQL database retail_db into HDFS location /user/cloudera/
+#Avro file format
+#This will create .avsc files into the current local working folder
+sqoop import-all-tables \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--as-avrodatafile \
+--warehouse-dir=/user/cloudera

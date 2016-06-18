@@ -1,0 +1,223 @@
+# Load data from HDFS and store results back to HDFS using Spark
+# 1	- Reading & Storing file in HDFS
+# When spark-shell launched without any further argument, 
+# by default for all the files, spark will look for the same in local filesystem
+# In case if it is stored in HDFS, you need to explicitely specify the HDFS path
+
+val ordersRDD = sc.textFile("hdfs://quickstart.cloudera/user/cloudera/orders.txt");
+ordersRDD.count();
+ordersRDD.saveAsTextFile("hdfs://quickstart.cloudera/user/cloudera/orders_save");
+
+# 2	- Reading file from local & writing the same back to HDFS
+# In this example, we're reading file stored in local file system path 
+# and then writing the same into HDFS
+
+val ordersRDD = sc.textFile("/home/cloudera/orders.txt");
+ordersRDD.count();
+ordersRDD.saveAsTextFile("hdfs://quickstart.cloudera/user/cloudera/orders_save");
+
+# 3	- Reading text file & save it to object file format
+
+val ordersRDD = sc.textFile("/home/cloudera/orders.txt");
+ordersRDD.count();
+ordersRDD.saveAsObjectFile("orders_save_obj");
+
+# 4	- Reading an object file & save it as text file format
+
+val ordersRDD = sc.objectFile[String]("/home/cloudera/orders.txt");
+ordersRDD.count();
+ordersRDD.saveAsTextFile("orders_save_text");
+
+# 5	- Reading text file & save it as Sequence file
+#	- saveAsSequenceFile is applicable only with RDD (k, v)
+
+val ordersRDD = sc.textFile("orders.txt");
+ordersRDD.count();
+ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, x(1))).saveAsSequenceFile("orders_seq");
+OR
+import org.apache.hadoop.io._
+ordersRDD.map(x => (NullWritable.get(), x)).saveAsSequenceFile("orders_seq");
+ordersRDD.map(x => (new IntWritable().get(), x)).saveAsSequenceFile("orders_seq");
+
+# 6	- Reading sequence file of IntWritable key & String value, save it to text file 
+
+val ordersSeqRDD = sc.sequenceFile("orders_seq1", classOf[IntWritable], classOf[Text]);
+ordersSeqRDD.count();
+# This statement print the data in key/value format in the output folder
+ordersSeqRDD.saveAsTextFile("orders_seq_text");
+# To print only the value, we can access the value
+ordersSeqRDD.map(x => x._2).saveAsTextFile("orders_seq_text");
+
+########################################################################################################################################
+
+# Join disparate datasets together using Spark
+# 1	- Join 2 different datasets using all possible join options
+
+val ordersRDD = sc.textFile("orders.txt");
+val ordersItemsRDD = sc.textFile("order_items.txt");
+ordersRDD.count();
+ordersItemsRDD.count();
+val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, x(1)));
+ordersMap.take(5).foreach(println);
+val ordersItemsMap = ordersItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat));
+ordersItemsMap.take(5).foreach(println);
+val ordersJoinedMap = ordersMap.join(ordersItemsMap);
+ordersJoinedMap.count(); # Result: 172198
+
+scala> val ordersJoinedMap = ordersMap.leftOuterJoin(ordersItemsMap);
+ordersJoinedMap: org.apache.spark.rdd.RDD[(Int, (String, Option[Float]))] = FlatMappedValuesRDD[42] at leftOuterJoin at <console>:20
+ordersJoinedMap.count(); # Result: 183650
+
+scala> val ordersJoinedMap = ordersMap.rightOuterJoin(ordersItemsMap);
+ordersJoinedMap: org.apache.spark.rdd.RDD[(Int, (Option[String], Float))] = FlatMappedValuesRDD[45] at rightOuterJoin at <console>:20
+ordersJoinedMap.count(); # Result: 172198
+
+scala> val ordersJoinedMap = ordersMap.rightOuterJoin(ordersItemsMap);
+ordersJoinedMap: org.apache.spark.rdd.RDD[(Int, (Option[String], Float))] = FlatMappedValuesRDD[45] at rightOuterJoin at <console>:20
+ordersJoinedMap.count(); # Result: 172198
+
+scala> val ordersJoinedMap = ordersMap.fullOuterJoin(ordersItemsMap);
+ordersJoinedMap: org.apache.spark.rdd.RDD[(Int, (Option[String], Option[Float]))] = FlatMappedValuesRDD[48] at fullOuterJoin at <console>:20
+ordersJoinedMap.count(); # Result: 183650
+
+########################################################################################################################################
+
+# Calculate aggregate statistics (e.g., average or sum) using Spark
+# 1	- Calculate sum of COMPLETED orders for each day and find average sales for each day
+
+val ordersRDD = sc.textFile("orders.txt");
+val ordersMap = ordersRDD.map(x => x.split(",")).filter(x => x(3) == "COMPLETE").map(x => (x(0).toInt, x(1)));
+val ordersItemsRDD = sc.textFile("order_items.txt");
+val orderItemsMap = ordersItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat));
+val ordersJoinedMap = ordersMap.join(orderItemsMap);
+
+val ordersDateMap = ordersJoinedMap.map(x => (x._2._1, 1)).reduceByKey((a, b) => (a+b));
+val ordersSalesMap = ordersJoinedMap.map(x => (x._2._1, x._2._2)).reduceByKey((a, b) => (a+b));
+val beforeAvgMap = ordersDateMap.join(ordersSalesMap);
+val resultMap = beforeAvgMap.map(x => (x._1, (x._2._1, (x._2._2, x._2._2/x._2._1)))).sortByKey();
+resultMap.take(5).foreach(println);
+
+# 2	- Alternative approach using aggregateByKey
+
+val ordersRDD = sc.textFile("orders.txt");
+val ordersMap = ordersRDD.map(x => x.split(",")).filter(x => x(3) == "COMPLETE").map(x => (x(0).toInt, x(1)));
+val ordersItemsRDD = sc.textFile("order_items.txt");
+val orderItemsMap = ordersItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat));
+val ordersJoinedMap = ordersMap.join(orderItemsMap);
+
+val orderSalesMap = ordersJoinedMap.map(x => (x._2._1, x._2._2));
+val salesPerDay = orderSalesMap.aggregateByKey((0.0, 0))((acc, revenue) => (acc._1 + revenue, acc._2 + 1), (total1, total2) => (total1._1 + total2._1, total1._2 + total2._2));
+val avgSalesPerDay = salesPerDay.map(x => (x._1, (x._2._2, (x._2._1, x._2._1/x._2._2)))).sortByKey();
+avgSalesPerDay.take(5).foreach(println);
+
+########################################################################################################################################
+
+# Filter data into a smaller dataset using Spark
+# 1 	- Filtering orders dataset
+
+val ordersRDD = sc.textFile("orders.txt");
+val ordersMap = ordersRDD.map(x => x.split(",")).filter(x => x(3) == "COMPLETE").map(x => (x(0).toInt, x(1)));
+ordersMap.take(5).foreach(println);
+
+val ordersMap = ordersRDD.map(x => x.split(",")).filter(x => x(3) == "COMPLETE" && x(1).startsWith("2014-07")).map(x => (x(0).toInt, x(1)));
+ordersMap.take(5).foreach(println)
+
+########################################################################################################################################
+
+# Write a query that produces ranked or sorted data using Spark
+# 1	- Sorting orders status by its total no. in descending 
+
+val ordersRDD = sc.textFile("orders.txt");
+val orderItemsRDD = sc.textFile("order_items.txt");
+val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, x(3)));
+val orderItemsMap = orderItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat));
+val orderJoinedMap = ordersMap.join(orderItemsMap);
+val orderStatusMap = orderJoinedMap.map(x => (x._2._1, 1)).reduceByKey((a, b) => a+b).sortBy(x => -x._2);
+orderStatusMap.collect().foreach(println);
+
+# 2	- Sorting orders status by its total sales in descending 
+
+val ordersRDD = sc.textFile("orders.txt");
+val orderItemsRDD = sc.textFile("order_items.txt");
+val ordersMap = ordersRDD.map(x => x.split(",")).map(x => (x(0).toInt, x(3)));
+val orderItemsMap = orderItemsRDD.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat));
+val orderJoinedMap = ordersMap.join(orderItemsMap);
+val orderStatusMap = orderJoinedMap.map(x => (x._2._1, x._2._2)).reduceByKey((a, b) => a+b).sortBy(x => -x._2);
+orderStatusMap.collect().foreach(println);
+
+# 3	- Max priced product from each category
+
+val productsRDD = sc.textFile("products.txt");
+val productsMap = productsRDD.map(x => (x.split(",")(1).toInt, x));
+
+def getTopOne(rec: (Int, Iterable[String])): (Int, String) = {
+	return (rec._1, rec._2.toList.sortBy(k => -k.split(",")(4).toFloat).head);
+}
+
+val productsGroupBy = productsMap.groupByKey().map(x => getTopOne(x)).collect();
+
+productsGroupBy.sortWith((a, b) => a._1 < b._1).foreach(println)
+
+# 4	- All products having max priced from each category
+
+def getTopOne(rec: (Int, Iterable[String])): List[String] = {
+var top1Price: Float = 0
+var sortedRecs: List[String] = List()
+top1Price = rec._2.toList.sortBy(k => -k.split(",")(4).toFloat).map(x => x.split(",")(4).toFloat).head
+sortedRecs = rec._2.toList.sortBy(k => -k.split(",")(4).toFloat) 
+var x: List[String] = List()
+for(i <- sortedRecs) {
+if(top1Price == i.split(",")(4).toFloat) {
+x = x:+ i 
+}
+}
+return x
+}
+
+val productsRDD = sc.textFile("products.txt");
+val productsMap = productsRDD.map(x => (x.split(",")(1).toInt, x));
+val productsGroupBy = productsMap.groupByKey().map(x => getTopOne(x)).collect();
+productsGroupBy.flatMap(x => x).sortBy(x => x.split(",")(1).toInt).foreach(println)
+
+productsGroupBy.flatMap(x => x).map(x => x.split(",")).map(x => (x(1).toInt, (x(0).toInt, x(4).toFloat))).sortBy(x => x._1).foreach(println)
+	
+# 5	- Max purchased customers from each month
+
+val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+val ordersMap = ordersRDD.map(x => (x.split(",")(0).toInt, x))
+val orderItemsMap = orderItemsRDD.map(x => (x.split(",")(1).toInt, x))
+val ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+val customerSalesPerMonth = ordersJoinedMap.map(x => ((x._2._1.split(",")(1).substring(0, 7), x._2._1.split(",")(2).toInt), x._2._2.split(",")(4).toFloat)).reduceByKey((a, b) => a+b).map(x => (x._1._1, (x._1._2, x._2)))
+
+def getMaxPurchase(rec: Iterable[(Int, Float)], topN: Int): Iterable[(Int, Float)] = {
+var retList: List[(Int, Float)] = rec.toList.sortBy(k => -k._2).take(topN)
+return retList
+}
+
+customerSalesPerMonth.groupByKey().map(x => (x._1, getMaxPurchase(x._2, 3))).takeOrdered(20).foreach(println)
+customerSalesPerMonth.groupByKey().map(x => (x._1, getMaxPurchase(x._2, 3))).sortByKey().foreach(println)
+
+# 6	- Max sold product from each month
+
+val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
+val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
+
+val ordersMap = ordersRDD.map(x => (x.split(",")(0).toInt, x))
+val orderItemsMap = orderItemsRDD.map(x => (x.split(",")(1).toInt, x))
+val ordersJoinedMap = ordersMap.join(orderItemsMap)
+
+val productsSalesPerMonth = ordersJoinedMap.map(x => ((x._2._1.split(",")(1).substring(0, 7), x._2._2.split(",")(2).toInt), x._2._2.split(",")(4).toFloat)).reduceByKey((a, b) => a+b).map(x => (x._1._1, (x._1._2, x._2)))
+
+def getMaxSold(rec: Iterable[(Int, Float)], topN: Int): Iterable[(Int, Float)] = {
+var retList: List[(Int, Float)] = rec.toList.sortBy(k => -k._2).take(topN)
+return retList
+}
+
+productsSalesPerMonth.groupByKey().map(x => (x._1, getMaxSold(x._2, 3))).takeOrdered(20).foreach(println)
+productsSalesPerMonth.groupByKey().map(x => (x._1, getMaxSold(x._2, 3))).sortByKey().foreach(println)
+
+####################################################################
+

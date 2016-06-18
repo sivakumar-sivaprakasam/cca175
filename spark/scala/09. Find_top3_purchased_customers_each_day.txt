@@ -3,28 +3,22 @@
 #And then using a function to return the top 3 customers list for each day
 
 ####################### Using scala #############################################
+
 val ordersRDD = sc.textFile("/home/cloudera/orders.txt")
 val orderItemsRDD = sc.textFile("/home/cloudera/order_items.txt")
 
 val ordersMap = ordersRDD.map(x => (x.split(",")(0).toInt, x))
 val orderItemsMap = orderItemsRDD.map(x => (x.split(",")(1).toInt, x))
-
-#Joining orders with orderItems
 val ordersJoinedMap = ordersMap.join(orderItemsMap)
 
-#Creating Tuple object having Date as Key and 
-#another Tuple object as value which contains order line and orderItems line
-val ordersCustomerMap = ordersJoinedMap.map(x => (x._2._1.split(",")(1), (x._2._1, x._2._2)))
+val orderTotalPerDayPerCustomerMap = ordersJoinedMap.map(x => ((x._2._1.split(",")(2).toInt, x._2._1.split(",")(1)), x._2._2.split(",")(4).toFloat)).reduceByKey((a, b) => a+b).map(x => (x._1._2, (x._1._1, x._2)))
 
-#Defining a function that will return TopN items from the given collection
-#This function takes Tuple object as input which is having Date as Key, Order & OrderItems as Value (again Tuple)
-#To find TopN purchased customers, we need to sort the total sales for each order by descending order
-#Total sales for each order can be found in OrderItems (4th element)
-#After sorting, forming another object model to return the expected output
-def getTopItems(x: (String, Iterable[(String, String)]), topNItems: Int): Iterable[(Int, Float)] = {
-	 val retList: List[(Int, Float)] = x._2.toList.sortBy(k => -k._2.split(",")(4).toFloat).take(topNItems).map(v => (v._1.split(",")(2).toInt, v._2.split(",")(4).toFloat))
+val ordersMapByCustomers = orderTotalPerDayPerCustomerMap.map(x => (x._1, (x._2._1, x._2._2)))
+
+def getTopItems(x: Iterable[(Int, Float)], topNItems: Int): Iterable[(Int, Float)] = {
+	 val retList: List[(Int, Float)] = x.toList.sortBy(k => -k._2).take(topNItems)
 	 return retList
 }
 
-ordersCustomerMap.groupByKey().map(x => (x._1, getTopItems(x, 3))).takeOrdered(5).foreach(println)
-ordersCustomerMap.groupByKey().map(x => (x._1, getTopItems(x, 3))).sortByKey().collect.foreach(println)
+ordersMapByCustomers.groupByKey().map(x => (x._1, getTopItems(x._2, 3))).takeOrdered(5).foreach(println)
+ordersMapByCustomers.groupByKey().map(x => (x._1, getTopItems(x._2, 3))).sortByKey().foreach(println)

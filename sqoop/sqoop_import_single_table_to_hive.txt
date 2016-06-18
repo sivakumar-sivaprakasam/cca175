@@ -5,6 +5,8 @@
 #For ex: if you're importing orders table into hive, data will first copied to hdfs folder /user/cloudera/orders
 #If your source table is not having any primary key defined, 
 #you need to explicitely define the column which contains unique key using --split-by switch
+#We cannot use --hive-import and --as-avrodatafile or --as-sequencefile together
+#Hive import doesn't compatible with Avro or Sequence format
 sqoop import \
 --connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
 --username retail_dba \

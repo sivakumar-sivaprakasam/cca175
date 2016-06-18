@@ -1,0 +1,88 @@
+#There are various ways to create table and load data into that
+#Option 1: We first need to create table in Hive, load the data to the table with a file kept in HDFS location
+#Option 2: We can create table in Hive, using 
+
+#Exporting data from mysql table into local folder 
+#You must have necessary privilage to write to file
+#Either you need to login using root a/c or 
+#your login a/c must have write access
+select * into outfile '/tmp/orders.psv' 
+fields terminated by '|'
+lines terminated by '\n' 
+from orders;
+
+#Incase if your login a/c doesn't have necessary privilage to write file, try this
+#Login to mysql using root a/c
+mysql -u root -p 
+
+update mysql.user set file_priv='Y' where user='retail_dba';
+commit;
+exit;
+
+#In the console prompt, try launching the below command to restart mysql
+service mysqld restart
+	
+#Creating table orders 
+#We can also create table in Hive using sqoop import command
+create table orders (order_id int, order_date string, order_customer_id int, order_status string) 
+row format delimited 
+fields terminated by '|' 
+lines terminated by '\n';
+
+#Load data from local folder
+load data local inpath '/tmp/orders.psv' into table orders;
+
+#Creating another table with partition column
+create table orders_part (order_id int, order_date string, order_customer_id int, order_status string) partitioned by (order_month string) row format delimited fields terminated by '|' lines terminated by '\n';
+
+#Changing the partition mode to nonstrict to create dynamic partition
+set hive.exec.dynamic.partition.mode=nonstrict;
+
+#Creating dynamic partition at the time of loading data
+insert into orders_part partition (order_month) 
+select order_id, order_date, order_customer_id, order_status, substr(order_date, 1, 7) order_month from orders;
+
+#Another way to load data into particular partition
+select *
+into outfile '/tmp/order-2014-01.psv' 
+fields terminated by '|' 
+lines terminated by '\n' 
+from orders where substr(order_date, 1, 7)='2014-01';
+
+create table orders_part (order_id int, order_date string, order_customer_id int, order_status string) partitioned by (order_month string) row format delimited fields terminated by '|' lines terminated by '\n';
+
+#We can create partition using alter statement or thru load data local inpath
+alter table orders_part add partition (order_month='2014-01');
+
+load data local inpath '/tmp/order-2014-01.psv' into table orders_part partition(order_month='2014-01');
+
+#To check the table created in impala
+#To start impala
+[cloudera@quickstart ~]$ impala-shell
+
+[quickstart.cloudera:21000] > use retail_db;
+Query: use retail_db
+
+[quickstart.cloudera:21000] > show tables;
+Query: show tables
+
+Fetched 0 row(s) in 0.10s
+
+#When you check show tables command, you wont find anything
+#It is because the schema is not in sync
+
+[quickstart.cloudera:21000] > invalidate metadata;
+Query: invalidate metadata
+
+Fetched 0 row(s) in 3.71s
+[quickstart.cloudera:21000] > show tables;
+Query: show tables
++-------------+
+| name        |
++-------------+
+| orders      |
+| orders_part |
++-------------+
+Fetched 2 row(s) in 0.11s
+[quickstart.cloudera:21000] >
+

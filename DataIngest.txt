@@ -1,0 +1,154 @@
+#Import data from a MySQL database into HDFS using Sqoop
+#1	- Importing orders table data from retail_db into HDFS 
+#	- textfile format with default delimiter, default mapper
+#	- even if we dont specify target-dir, the output will be written to default hdfs folder
+#	- when we use --query or -e switch, we must specify target-dir 
+sqoop import \
+--connect="jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba \
+--password cloudera \
+--table orders \
+--target-dir /user/cloudera/orders \
+--as-textfile
+
+#2	- Importing orders table data from retail_db into HDFS 
+#	- textfile format with default delimiter, default mapper
+#	- Clean up target dir if it exists
+sqoop import \
+--connect="jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba \
+--password cloudera \
+--table orders \
+--target-dir /user/cloudera/orders \
+--as-textfile \
+--delete-target-dir
+
+#3	- Importing orders table data from retail_db into HDFS 
+#	- textfile format with only one mapper (so, total files will be 1)
+#	- Clean up target dir if it exists
+sqoop import \
+--connect="jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba \
+--password cloudera \
+--table orders \
+--target-dir /user/cloudera/orders \
+--as-textfile \
+--delete-target-dir \
+--m 1 \
+--fields-terminated-by "|" \
+--lines-terminated-by "\n"
+
+#4	- Importing orders table data from retail_db into HDFS 
+#	- textfile format with only one mapper (so, total files will be 1)
+#	- Conditional Import 
+sqoop import \
+--connect="jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba \
+--password cloudera \
+--table orders \
+--target-dir /user/cloudera/orders \
+--as-textfile \
+--delete-target-dir \
+--m 1 \
+--fields-terminated-by "|" \
+--lines-terminated-by "\n" \
+--where "order_id < 11"
+
+#5	- Importing orders table data from retail_db into HDFS with append
+#	- textfile format with only one mapper (so, total files will be 1)
+#	- Conditional Import 
+sqoop import \
+--connect="jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba \
+--password cloudera \
+--table orders \
+--target-dir /user/cloudera/orders \
+--as-textfile \
+--append \
+--m 1 \
+--fields-terminated-by "|" \
+--lines-terminated-by "\n" \
+--where "order_id > 10 and order_id < 101"
+
+#6	- Importing orders table data from retail_db into HDFS 
+#	- textfile format with only one mapper (so, total files will be 1)
+#	- Clean up target dir if it exists
+#	- Only specific columns (order_id, order_date, order_status)
+#	- When we use --columns switch, there shouldn't be any white-space char between columns
+sqoop import \
+--connect="jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba \
+--password cloudera \
+--table orders \
+--target-dir /user/cloudera/orders \
+--as-textfile \
+--delete-target-dir \
+--m 1 \
+--fields-terminated-by "|" \
+--lines-terminated-by "\n" \
+--columns order_id,order_date,order_status
+
+#7	- Importing orders table data from retail_db into HDFS
+#	- textfile format with freeform query 
+#	- when using freeform query, we must specify target-dir
+#	- and also, we must specify split-by switch to specify column provided if we dont pass --m 1
+sqoop import \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--delete-target-dir \
+--as-textfile \
+--target-dir=/user/cloudera/orders \
+--query "select * from orders where \$CONDITIONS" \
+--split-by order_customer_id
+
+#8	- Importing orders table data from retail_db into HDFS
+#	- sequencefile
+#	- when using freeform query, we must specify target-dir
+#	- and also, we must specify split-by switch to specify column provided if we dont pass --m 1
+sqoop import \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--delete-target-dir \
+--as-sequencefile \
+--target-dir=/user/cloudera/orders \
+--query "select * from orders where \$CONDITIONS" \
+--split-by order_customer_id
+
+#9	- Importing orders table data from retail_db into HDFS
+#	- avrodatafile (This option will create .avsc file (AVRO Schema file) in the local working folder
+#	- when using freeform query, we must specify target-dir
+#	- and also, we must specify split-by switch to specify column provided if we dont pass --m 1
+sqoop import \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--delete-target-dir \
+--as-avrodatafile \
+--target-dir=/user/cloudera/orders \
+--query "select * from orders where \$CONDITIONS" \
+--split-by order_customer_id
+
+#10	- Importing all tables from retail_db into HDFS
+#	- as textfile
+sqoop import-all-tables \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba \
+--password cloudera \
+--as-textfile
+
+###########################################################################################################
+
+#Export data to a MySQL database from HDFS using Sqoop
+#1	- Exporting orders data from HDFS to MySQL table orders_export_test
+create table orders_export_test select * from orders where 1=2;
+
+sqoop export \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba \
+--password cloudera \
+--table orders_export_test \
+--export-dir /user/cloudera/orders
+
+###########################################################################################################
