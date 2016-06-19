@@ -1,0 +1,12 @@
+# Read and/or create a table in the Hive metastore in a given schema
+
+# Extract an Avro schema from a set of datafiles using avro-tools
+
+# Create a table in the Hive metastore using the Avro file format and an external schema file
+
+# Improve query performance by creating partitioned tables in the Hive metastore
+
+# Evolve an Avro schema by changing JSON files
+
+
+
