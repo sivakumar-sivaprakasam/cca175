@@ -1,12 +1,306 @@
 # Read and/or create a table in the Hive metastore in a given schema
+# To create table in Hive, it can be done in 2 different ways
+# Either we can execute CREATE TABLE statement directly in Hive
+# Or using sqoop create-hive-table 
+
+# We can let Hive stores data in various formats (SequenceFile, TextFile (default), Avro, Parquet etc)
+
+#1	- Creating MANAGED table Orders in Hive (Text format)
+#	- This command will create Orders table (if not exists) using TextFormat in default HDFS location
+#	- Default HDFS location for storing data /user/hive/warehouse
+
+create table if not exists orders (order_id int, order_date string, order_customer_id int, order_status string)
+row format delimited 
+fields terminated by ',';
+
+#	- To validate the table schema, 
+describe formatted orders;
+
+#2	- Creating MANAGED table Orders in Hive (Text format)
+#	- Overriding location
+
+create table if not exists orders (order_id int, order_date string, order_customer_id int, order_status string)
+row format delimited 
+fields terminated by ',' 
+location '/home/cloudera';
+
+#3	- Creating MANAGED table Orders in Hive (Sequence format)
+#	- Overriding location
+
+create table if not exists orders (order_id int, order_date string, order_customer_id int, order_status string)
+row format delimited 
+fields terminated by ',' 
+stored as sequencefile
+location '/home/cloudera';
+
+#4	- Creating MANAGED table Orders in Hive (Avro format)
+#	- Overriding location
+#	- When we do insert, data gets written along with Avro schema
+#	- We can use avro-tools to further work on the avro file
+
+create table if not exists orders (order_id int, order_date string, order_customer_id int, order_status string)
+row format delimited 
+fields terminated by ',' 
+stored as avro
+location '/home/cloudera';
+
+# To insert data into orders table
+insert into orders values(1, '2013-01-20', 1, 'Completed');
+
+# After the insert command executed, a file named 000000_0 will be created under /home/cloudera
+# This file contains data+avro schema
+# we can copy this file & move them into local folders
+
+hadoop fs -copyToLocal /home/cloudera/000000_0 ./Orders.avro
+
+# Once the file Orders.avro copied, we can use avro-tools to examine the file
+
+#5	- Creating EXTERNAL table Orders in Hive
+#	- When we create External table, if we drop schema from Hive metastore, the data will remain in HDFS
+
+create external table if not exists orders (order_id int, order_date string, order_customer_id int, order_status string)
+row format delimited 
+fields terminated by ',';
+
+#6	- Creating MANAGED table Orders in Hive using sqoop create-hive-table command
+
+sqoop create-hive-table 
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db 
+--username retail_dba 
+--password cloudera 
+--table orders 
+--fields-terminated-by ','
+
+#7	- Creating MANAGED table Orders in Hive using sqoop create-hive-table command
+#	- If you want to create the hive table under specific Hive database, use the switch --hive-database
+#	- You can specify the target table name in Hive using --hive-table switch
+
+sqoop create-hive-table 
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db 
+--username retail_dba 
+--password cloudera 
+--table orders 
+--fields-terminated-by ','  
+--hive-database retail_db 
+--hive-table orders_test;
+
+###########################################################################################################
 
 # Extract an Avro schema from a set of datafiles using avro-tools
+# avro-tools comes with various options. To extract schema from an avro file, 
+# use avro-tools getschema <avro file>
+
+avro-tools getschema Orders.avro
+
+# using avro-tools, we can convert avro data into JSON 
+
+avro-tools tojson Orders.avro
+
+# to extract metadata, 
+# getmeta & getschema almost return similar output
+
+avro-tools getmeta Orders.avro
+
+###########################################################################################################
 
 # Create a table in the Hive metastore using the Avro file format and an external schema file
+# To get table data in avro format, we can use sqoop import to transform RDBMS data into AVRO
+# sqoop import command export mysql table data in avro format
+# it will emit 2 outputs. 1) avsc file 2) actual avro data files
+# avsc file will be stored in your local working folder
+# avro data files will be stored in HDFS (default: /user/<your login folder>/, in this case it is /user/cloudera)
+# if you want to override the target folder, specify explicitely using switch --warehouse-dir or --target-dir
+# difference between --target-dir and --warehouse-dir is: 
+# in case of --target-dir, all files will be copied into the specified directory
+# in case of --warehouse-dir, all files will be copied under folder with name of table created, in the specified directory
+
+# Please note: you cannot use --hive-import switch when the target is avro format
+
+sqoop import --connect jdbc:mysql://quickstart.cloudera:3306/retail_db --username retail_dba --password cloudera --table orders --as-avrodatafile --fields-terminated-by ','
+
+# we then need to copy the .avsc file kept in your local working folder into HDFS
+
+hadoop fs -copyFromLocal sqoop_import_orders.avsc /user/cloudera/orders.avsc
+
+# To create table in Hive alongwith avro data file
+
+create table orders 
+stored as avro 
+location '/user/cloudera/orders' 
+tblproperties('avro.schema.url'='/user/cloudera/orders.avsc');
+
+# Alternatively, we can give avro schema literal alongwith avro data file
+
+create table orders 
+stored as avro 
+location '/user/cloudera/orders'
+tblproperties('avro.schema.literal'='
+{
+  "type" : "record",
+  "name" : "sqoop_import_orders",
+  "doc" : "Sqoop import of orders",
+  "fields" : [ {
+    "name" : "order_id",
+    "type" : [ "int", "null" ],
+    "columnName" : "order_id",
+    "sqlType" : "4"
+  }, {
+    "name" : "order_date",
+    "type" : [ "long", "null" ],
+    "columnName" : "order_date",
+    "sqlType" : "93"
+  }, {
+    "name" : "order_customer_id",
+    "type" : [ "int", "null" ],
+    "columnName" : "order_customer_id",
+    "sqlType" : "4"
+  }, {
+    "name" : "order_status",
+    "type" : [ "string", "null" ],
+    "columnName" : "order_status",
+    "sqlType" : "12"
+  } ],
+  "tableName" : "orders"
+}');
+
+# Just to create Hive table using avro schema
+
+create table orders_test
+stored as avro 
+tblproperties('avro.schema.url'='/user/cloudera/orders.avsc');
+
+###########################################################################################################
 
 # Improve query performance by creating partitioned tables in the Hive metastore
+# We can specify partition column at the time of table creation 
+# OR we can specify the partition column with partition value using ALTER table statement
+
+# Dynamic Partition 
+# using sqoop import, first importing contents of orders table
+sqoop import 
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db 
+--username retail_dba 
+--password cloudera 
+--table orders 
+--hive-import 
+--create-hive-table 
+--fields-terminated-by ',' 
+--as-textfile
+
+# creating another table with partition column specified
+create table orders_part 
+(order_id int, order_date string, order_customer_id int, order_status string)
+partitioned by (order_month string) 
+row format delimited 
+fields terminated by ',' ;
+
+# To enable dynamic partition, we need to set this
+set hive.exec.dynamic.partition.mode=nonstrict;
+
+insert into orders_part partition (order_month) 
+select order_id, order_date, order_customer_id, order_status, substr(order_date, 1, 7) order_month from orders;
+
+# Individual Partition for textformatted table
+# This can be achieved using various ways
+# 1) Sqoop Import 2) Insert into 3) Load data
+
+# When using sqoop import, if the hive table already exists, make sure you specify the correct field terminator
+sqoop import 
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db 
+--username retail_dba 
+--password cloudera 
+--table orders 
+--where "substr(order_date, 1, 7) = '2013-07'" 
+--hive-import 
+--hive-overwrite 
+--hive-table orders_part 
+--hive-partition-key order_month 
+--hive-partition-value "2013-07" 
+--target-dir /user/cloudera/orders 
+--fields-terminated-by ','
+
+# Insert into
+insert into orders_part partition (order_month='2013-08') 
+select * from orders where substr(order_date, 1, 7) = '2013-08';
+
+# Load Table
+# We need to export the data from mysql into a file 
+#Exporting data from mysql table into local folder 
+#You must have necessary privilage to write to file
+#Either you need to login using root a/c or 
+#your login a/c must have write access
+
+select * into outfile '/tmp/orders_2013_10.txt'  
+fields terminated by ','  
+lines terminated by '\n'  
+from orders  
+where substr(order_date, 1, 7) = '2013-10';
+
+# In Hive, using load table statement, we can import data into it
+load data local inpath '/tmp/orders_2013_10.txt' into table orders_part partition (order_month='2013-10');
+
+# Individual Partition for AVRO formatted table
+
+CREATE EXTERNAL TABLE orders_part_avro
+partitioned by (order_month string)
+STORED AS AVRO
+TBLPROPERTIES ('avro.schema.url'='hdfs:///user/cloudera/orders.avsc');
+
+alter table orders_part_avro add partition (order_month='2013-07');
+
+insert into orders_part_avro partition(order_month='2013-07') select * from orders where substr(order_date, 1, 7)='2013-07';
+###########################################################################################################
 
 # Evolve an Avro schema by changing JSON files
+# We can add new column by modifying the avro schema file
+# We now going to modify orders.avsc schema file to add one new field order_year
+# We need to specify the default value in case if the field is non-null
+
+{
+  "type" : "record",
+  "name" : "sqoop_import_orders",
+  "doc" : "Sqoop import of orders",
+  "fields" : [ {
+    "name" : "order_id",
+    "type" : [ "int", "null" ],
+    "columnName" : "order_id",
+    "sqlType" : "4"
+  }, {
+    "name" : "order_date",
+    "type" : [ "long", "null" ],
+    "columnName" : "order_date",
+    "sqlType" : "93"
+  }, {
+    "name" : "order_year",
+    "type" : [ "int", "null" ],
+    "columnName" : "order_year",
+    "default" : 1900,
+    "sqlType" : "4"
+  }, {
+    "name" : "order_customer_id",
+    "type" : [ "int", "null" ],
+    "columnName" : "order_customer_id",
+    "sqlType" : "4"
+  }, {
+    "name" : "order_status",
+    "type" : [ "string", "null" ],
+    "columnName" : "order_status",
+    "sqlType" : "12"
+  } ],
+  "tableName" : "orders"
+}
+
+
+# after added the field to orders.avsc file in your local folder, 
+# we need to copy this file into HDFS
+
+hadoop fs -put -f sqoop_import_orders.avsc /user/cloudera/orders.avsc
+
+# to validate the schema changes
+
+describe formatted orders_part_avro;
+
+###########################################################################################################
 
 
 

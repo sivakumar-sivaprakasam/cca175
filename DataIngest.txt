@@ -1,4 +1,4 @@
-#Import data from a MySQL database into HDFS using Sqoop
+# Import data from a MySQL database into HDFS using Sqoop
 #1	- Importing orders table data from retail_db into HDFS 
 #	- textfile format with default delimiter, default mapper
 #	- even if we dont specify target-dir, the output will be written to default hdfs folder
@@ -140,7 +140,7 @@ sqoop import-all-tables \
 
 ###########################################################################################################
 
-#Export data to a MySQL database from HDFS using Sqoop
+# Export data to a MySQL database from HDFS using Sqoop
 #1	- Exporting orders data from HDFS to MySQL table orders_export_test
 create table orders_export_test select * from orders where 1=2;
 
@@ -152,3 +152,16 @@ sqoop export \
 --export-dir /user/cloudera/orders
 
 ###########################################################################################################
+
+# Change the delimiter and file format of data during import using Sqoop
+
+###########################################################################################################
+
+# Ingest real-time and near-real time (NRT) streaming data into HDFS using Flume
+
+###########################################################################################################
+
+# Load data into and out of HDFS using the Hadoop File System (FS) commands
+
+###########################################################################################################
+
