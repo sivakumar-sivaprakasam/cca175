@@ -185,5 +185,20 @@ def getMaxSold(rec, topN):
 
 for i in productsSalesPerMonth.groupByKey().map(lambda x: (x[0], getMaxSold(x[1], 3))).takeOrdered(20): print(i)
 
+# 7	- Get 3rd top most purchased customers from each month
+
+orders = sc.textFile("orders.txt")
+orderItems = sc.textFile("order_items.txt")
+ordersMap = orders.map(lambda x: x.split(",")).filter(lambda x: x[3] == "COMPLETE").map(lambda x: (int(x[0]), (x[1], int(x[2]))))
+orderItemsMap = orderItems.map(lambda x: x.split(",")).map(lambda x: (int(x[1]), float(x[4])))
+ordersJoin = ordersMap.join(orderItemsMap)
+orderDateCustomersMap = ordersJoin.map(lambda x: x[1]).reduceByKey(lambda a, b: a+b).map(lambda x: (x[0][0], (x[0][1], x[1]))).sortBy(lambda x: -x[1][1])
+
+def get3rdTopCustomer(inList): 
+	return list(inList)[2]
+
+for i in orderDateCustomersMap.groupByKey().map(lambda x: (x[0], list(x[1])[2])).sortByKey().collect(): print(i)
+for i in orderDateCustomersMap.groupByKey().map(lambda x: (x[0], get3rdTopCustomer(x[1]))).sortByKey().collect(): print(i)
+
 ####################################################################
 

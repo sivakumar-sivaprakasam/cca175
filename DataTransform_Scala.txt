@@ -219,5 +219,22 @@ return retList
 productsSalesPerMonth.groupByKey().map(x => (x._1, getMaxSold(x._2, 3))).takeOrdered(20).foreach(println)
 productsSalesPerMonth.groupByKey().map(x => (x._1, getMaxSold(x._2, 3))).sortByKey().foreach(println)
 
+# 7	- Get 3rd top most purchased customers from each month
+
+val orders = sc.textFile("orders.txt");
+val orderItems = sc.textFile("order_items.txt");
+val ordersMap = orders.map(x => x.split(",")).filter(x => x(3) == "COMPLETE").map(x => (x(0).toInt, (x(1), x(2).toInt)));
+val orderItemsMap = orderItems.map(x => x.split(",")).map(x => (x(1).toInt, x(4).toFloat));
+val ordersJoin = ordersMap.join(orderItemsMap);
+val orderDateCustomersMap = ordersJoin.map(x => x._2).reduceByKey((a, b) => a+b).map(x => (x._1._1, (x._1._2, x._2))).sortBy(x => -x._2._2);
+orderDateCustomersMap.take(10).foreach(println);
+
+def get3rdTopCustomer(inList: Iterable[(Int, Float)]): (Int, Float) = {
+val retTuple: (Int, Float) = inList.toList.take(3).drop(2).head;
+return retTuple;
+}
+
+orderDateCustomersMap.groupByKey().map(x => (x._1, get3rdTopCustomer(x._2))).sortByKey().foreach(println);
+
 ####################################################################
 
