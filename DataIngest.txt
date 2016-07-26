@@ -158,6 +158,77 @@ sqoop export \
 ###########################################################################################################
 
 # Ingest real-time and near-real time (NRT) streaming data into HDFS using Flume
+#1	- Ingest real-time data into HDFS 
+#	- Below is the flume conf file to read the data realtime
+#	- It will read the result of "tail" command and ingest into HDFS 
+#	- Save this below conf into flume-exec-test.conf file under your local folder 
+
+# Name the components on this agent
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+# Describe/configure the source
+a1.sources.r1.type = exec
+a1.sources.r1.command = tail -F /opt/gen_logs/logs/access.log
+
+# Describe the sink
+a1.sinks.k1.type = hdfs
+a1.sinks.k1.hdfs.path = hdfs://quickstart.cloudera/user/cloudera/flume/%y-%m-%d
+a1.sinks.k1.hdfs.filePrefix = log
+a1.sinks.k1.hdfs.fileType = DataStream
+a1.sinks.k1.hdfs.useLocalTimeStamp = true
+
+# Use a channel which buffers events in memory
+a1.channels.c1.type = memory
+a1.channels.c1.capacity = 1000
+a1.channels.c1.transactionCapacity = 100
+
+# Bind the source and sink to the channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+
+#	- To start populating logs, we can use the following command
+startlogs
+
+#	- To start the flume agent
+flume-ng agent --conf /home/cloudera --conf-file /home/cloudera/flume-exec-test.conf --name a1
+
+#2	- Ingest near real-time data into HDFS 
+#	- Below is the flume conf file to read the data near-realtime
+#	- It will read the telnet inputs and ingest into HDFS 
+#	- Save this below conf into flume-netcat-test.conf file under your local folder 
+
+# Name the components on this agent
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+# Describe/configure the source
+a1.sources.r1.type = netcat
+a1.sources.r1.bind = localhost
+a1.sources.r1.port = 44444
+
+# Describe the sink
+a1.sinks.k1.type = hdfs
+a1.sinks.k1.hdfs.path = hdfs://quickstart.cloudera/user/cloudera/flume
+a1.sinks.k1.hdfs.filePrefix = netcat
+a1.sinks.k1.hdfs.fileType = DataStream
+
+# Use a channel which buffers events in memory
+a1.channels.c1.type = memory
+a1.channels.c1.capacity = 1000
+a1.channels.c1.transactionCapacity = 100
+
+# Bind the source and sink to the channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+
+#	- To start populating input, we need to launch telnet on localhost:44444
+telnet localhost 44444
+
+#	- To start the flume agent
+flume-ng agent --conf /home/cloudera --conf-file /home/cloudera/flume-netcat-test.conf --name a1
 
 ###########################################################################################################
 

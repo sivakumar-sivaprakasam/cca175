@@ -97,6 +97,10 @@ val beforeAvgMap = ordersDateMap.join(ordersSalesMap);
 val resultMap = beforeAvgMap.map(x => (x._1, (x._2._1, (x._2._2, x._2._2/x._2._1)))).sortByKey();
 resultMap.take(5).foreach(println);
 
+OR
+val ordersDateMap = ordersJoinedMap.map(x => (x._2._1, (1, x._2._2))).reduceByKey((a, b) => (a._1+b._1, a._2+b._2))
+resultMap.take(5).foreach(println);
+
 # 2	- Alternative approach using aggregateByKey
 
 val ordersRDD = sc.textFile("orders.txt");

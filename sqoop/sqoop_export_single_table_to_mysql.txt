@@ -49,3 +49,31 @@ sqoop export \
 --input-fields-terminated-by ',' \
 --update-key order_id \
 --update-mode allowinsert
+
+#Exporting sequence file into MySQL
+#For SequenceFile, we need to explicitely specify 
+#--jar-file & --class-name switch to let Sqoop know how to handle the data
+#To get the jarfile, you need to either develope your own program or 
+#keep the jarfile generated while you do sqoop import 
+
+#This below sqoop import will preserve the jarfile
+sqoop import \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--table orders \
+--as-sequencefile \
+--target-dir /user/cloudera/orders \
+--outdir /home/cloudera/sqoop/import/out \
+--bindir /home/cloudera/sqoop/import/bin
+
+#Then use the jarfile generated from sqoop import to export the 
+#sequence file data from HDFS into MySQL
+sqoop export \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--table orders_export_test \
+--export-dir /user/cloudera/orders \
+--jar-file sqoop/import/bin/orders.jar \
+--class-name orders
